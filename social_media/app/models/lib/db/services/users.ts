@@ -3,6 +3,7 @@ import jwt, { SignOptions } from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import { Secret } from "jsonwebtoken";
 
+const secret = process.env.NEXTAUTH_SECRET;
 export type User = {
   id?: number;
   firstName: string;
@@ -20,16 +21,41 @@ export const hashedPassword = async (password: string) => {
   return await bcrypt.hash(password, 10);
 };
 
-export const getToken = (user: User) => {
-  const options: SignOptions = {
-    expiresIn: process.env.EXPIREIN as SignOptions["expiresIn"],
-  };
+export const getToken = async (user: User) => {
+  let token;
 
-  const token = jwt.sign(
-    { userId: user.id, email: user.email, role: user.role_id },
-    process.env.NEXTAUTH_SECRET as Secret,
-    options,
-  );
+  if (user !== null) {
+    const id = user.role_id;
+
+    const query = `
+      SELECT *
+      FROM role_permission
+      FULL OUTER JOIN permissions
+      ON role_permission.permission_id = permissions.id
+      WHERE role_permission.role_id = $1
+    `;
+
+    const result = await pool.query(query, [id]);
+
+    const payload = {
+      country: user.country,
+      userID: user.id,
+      role: {
+        role: result.rows[0].role_id,
+        permissions: result.rows[0].name,
+      },
+    };
+
+    const options: SignOptions = {
+      expiresIn: process.env.EXPIREIN as SignOptions["expiresIn"],
+    };
+
+    token = jwt.sign(payload, secret as Secret, options);
+
+    console.log(token);
+  } else {
+    token = "Sorry there is no any role for this email";
+  }
 
   return token;
 };
@@ -49,7 +75,7 @@ export const Register = async (newUser: User) => {
     ],
   );
 
-  // console.log(result.rows[0])
+   console.log(result.rows[0])
   const user = result.rows[0];
   if (user) {
     return {
@@ -62,7 +88,7 @@ export const Register = async (newUser: User) => {
       email: user.email,
       password: user.password,
       role_id: user.role_id,
-      token : getToken(user)
+      token: await getToken(user),
     };
   }
 };
