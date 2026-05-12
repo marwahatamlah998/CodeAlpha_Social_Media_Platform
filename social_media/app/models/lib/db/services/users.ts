@@ -17,8 +17,17 @@ export type User = {
   is_deleted: 0;
 };
 
+export type Login = {
+  email: string;
+  password: string;
+};
+
 export const hashedPassword = async (password: string) => {
   return await bcrypt.hash(password, 10);
+};
+
+const comparePassword = async (password: string, hashedPassword: string) => {
+  return await bcrypt.compare(password, hashedPassword);
 };
 
 export const getToken = async (user: User) => {
@@ -52,7 +61,7 @@ export const getToken = async (user: User) => {
 
     token = jwt.sign(payload, secret as Secret, options);
 
-    console.log(token);
+    //console.log(token);
   } else {
     token = "Sorry there is no any role for this email";
   }
@@ -75,7 +84,7 @@ export const Register = async (newUser: User) => {
     ],
   );
 
-   console.log(result.rows[0])
+  console.log(result.rows[0]);
   const user = result.rows[0];
   if (user) {
     return {
@@ -90,5 +99,42 @@ export const Register = async (newUser: User) => {
       role_id: user.role_id,
       token: await getToken(user),
     };
+  }
+};
+
+export const Login = async (email: string, password: string) => {
+  const result = await pool.query(
+    `SELECT firstName , lastName, age, country, phoneNumber ,email , password , role_id FROM users WHERE email=$1`,
+    [email.toLocaleLowerCase()],
+  );
+  if (result.rows.length === 0) {
+    throw new Error("Invalid email or password");
+  }
+
+  if (result) {
+    const hashedPassword = result.rows[0].password;
+    const isMatch = await comparePassword(password, hashedPassword);
+    // console.log(isMatch)
+    const user = result.rows[0];
+// console.log(user)
+    if (isMatch) {
+      return {
+        id: user.id,
+        firstName: user.firstname,
+        lastName: user.lastname,
+        age: user.age,
+        country: user.country,
+        phoneNumber: user.phonenumber,
+        email: user.email,
+        password: user.password,
+        role_id: user.role_id,
+        is_deleted: 0,
+        token: await getToken(user),
+      };
+    } else {
+      throw new Error("Please check password");
+    }
+  } else {
+    throw new Error(" Please check the email");
   }
 };
